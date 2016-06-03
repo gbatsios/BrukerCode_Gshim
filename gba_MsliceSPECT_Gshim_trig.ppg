@@ -1,0 +1,150 @@
+;****************************************************************
+;
+; Copyright (c) 2002 - 2003
+; Bruker BioSpin MRI GmbH
+; D-76275 Ettlingen, Germany
+;
+; All Rights Reserved
+; 
+; NSPECT - non-selective spectroscopy (pulse + acquire)
+;
+;****************************************************************
+;
+; d0 - TR padding
+; d8 - CONFIG_amplifier_enable
+
+#include <MRI.include>
+define delay decodur
+define delay d4d10u ;KW-sliceSPECT
+
+"decodur=d1-de"
+"d4d10u = d4 +10u"  ;KW-sliceSPECT
+
+define loopcounter lds = {$Ndummy}
+#include <PrepModulesHead.mod>
+#include <decoacq.mod>
+preset off
+
+INIT_DEVICES
+
+if(AQ_mod == qdig)
+{
+         fq1b transmit          ;disable fq1b receive
+}
+
+#include <TrigOutStart.mod>
+#include <TriggerPerPhaseStep.mod>
+
+;----------------------------------start of the main loop ----------
+start, 	9u 
+        1u                      ; to enable adjustment during GSP
+;----------------------------------preparation modules -------------
+
+#include <TrigOutVolume.mod>
+
+#include <TriggerPerSlice.mod> 
+#include <TrigOutSlice.mod>
+
+subr FatSup()
+subr Noe()
+subr WsSat(ph1)
+;        10u
+; 	d8	gatepulse 1
+;	(p0:sp0 ph0):f1
+;        goto nonav
+;nav,    10u
+; 	d8	gatepulse 1
+;	(p0:sp1 ph0):f1
+;nonav,	5u
+;-----------------------KW-sliceSPEC_(begin)_100714-------------
+        10u fq8b:f1
+        d6	grad{(0)|(0)|(t2)} ;spoiler
+;----------------------------------slice selection------------------	
+	d3 	grad{(t3)|(t4)|(t9)} fq1:f1		;Gba-shim
+	d8	gatepulse 1
+	(p0:sp0 ph0):f1
+	d4d10u 	grad{(t3)|(t4)|(t5)}			;Gba-shim
+;----------------------------------slice rephase--------------------
+	d10 	grad{(t3)|(t4)|(t10)}			;Gba-shim
+	d4 	grad{(t3)|(t4)|(t5)}			;Gba-shim
+;----------------------------------TE padding-----------------------
+	d11
+;-----------------------KW-sliceSPEC_(end)_100714-------------
+        goto nonav
+nav,    10u
+ 	d8	gatepulse 1
+	(p0:sp1 ph0):f1
+nonav,	5u
+subr decoup(decodur,ph0,ph1)
+        d2
+        10u ADC_END
+        1m
+if (l0 != 1)
+{
+        lo to nav times l0   ;l0 = 1 if no nav, or 2 if nav
+}
+
+;---------------------Gba_110228_start-------------------------------
+	d0  islice
+	
+;---------------- 2nd slice ------------------------------------------	
+;-------------------- Gradient Shim (start) -------------------------
+
+;----------------------------------start of the main loop ----------
+ 
+        10u                      ; to enable adjustment during GSP
+
+;-----------------------KW-sliceSPEC_(begin)_100714-------------
+        10u fq8b:f1
+        d6	grad{(0)|(0)|(t2)} ;spoiler
+;----------------------------------slice selection------------------	
+	d3 	grad{(t6)|(t7)|(t11)} fq1:f1		;Gba-shim
+	d8	gatepulse 1
+	(p0:sp0 ph0):f1
+	d4d10u 	grad{(t6)|(t7)|(t8)}			;Gba-shim
+;----------------------------------slice rephase--------------------
+	d10 	grad{(t6)|(t7)|(t12)}			;Gba-shim
+	d4 	grad{(t6)|(t7)|(t8)}			;Gba-shim
+;----------------------------------TE padding-----------------------
+	d11
+;-----------------------KW-sliceSPEC_(end)_100714-------------
+        goto nonav2
+nav2,    10u
+ 	d8	gatepulse 1
+	(p0:sp1 ph0):f1
+nonav2,	5u
+subr decoup(decodur,ph0,ph1)
+        d2
+        10u ADC_END
+        1m
+if (l0 != 1)
+{
+        lo to nav2 times l0   ;l0 = 1 if no nav2, or 2 if nav2
+}
+
+;---------------- 2nd slice - Gradient Shim (end) -----------------
+d0  islice
+;lo to start times NSLICES
+	1u	ipp1 zslice
+;---------------------Gba_110228_end---------------------------------
+
+	20u reload B0     
+        "lds =lds - 1"         ; this makes
+        if "lds>=0" goto start ; dummy scans
+	10u	ipp0
+lo to start times NA
+        2.5u	rpp0
+lo to start times NR
+SETUP_GOTO(start)
+
+exit
+
+ph0  = 0 2 1 3
+ph1  = 0 
+
+	
+
+
+
+
+
